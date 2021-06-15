@@ -81,7 +81,7 @@ public:
 };
 #endif /* __cplusplus */
 
-typedef struct
+struct internal_data_t
 {
 #ifndef __cplusplus
   struct
@@ -93,8 +93,7 @@ typedef struct
   INT64 profile_offset;
   INT64 toffset;
   unsigned pana_black[4];
-
-} internal_data_t;
+};
 
 #define LIBRAW_HISTOGRAM_SIZE 0x2000
 typedef struct
@@ -175,14 +174,17 @@ typedef struct
   unsigned short raw_stride;
 } unpacker_data_t;
 
-typedef struct
+struct libraw_internal_data_t
 {
-  internal_data_t internal_data;
+#ifndef __cplusplus
+  struct
+#endif
+    internal_data_t internal_data;
   libraw_internal_output_params_t internal_output_params;
   output_data_t output_data;
   identify_data_t identify_data;
   unpacker_data_t unpacker_data;
-} libraw_internal_data_t;
+};
 
 struct decode
 {

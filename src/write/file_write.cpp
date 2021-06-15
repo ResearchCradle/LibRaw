@@ -19,6 +19,8 @@
 #include "../../internal/dcraw_defs.h"
 #include <vector>
 
+#include "internal/tiff_header.h"
+
 int LibRaw::flip_index(int row, int col)
 {
   if (flip & 4)
@@ -121,8 +123,8 @@ void LibRaw::tiff_head(struct tiff_hdr *th, int full)
   tiff_set(th, &th->nexif, 37386, 5, 1, TOFF(th->rat[8]));
   if (gpsdata[1])
   {
-    uchar latref[4] = { (uchar)(gpsdata[29]),0,0,0 },
-          lonref[4] = { (uchar)(gpsdata[30]),0,0,0 };
+    uchar latref[4] = {(uchar)(gpsdata[29]), 0, 0, 0},
+          lonref[4] = {(uchar)(gpsdata[30]), 0, 0, 0};
     tiff_set(th, &th->ntag, 34853, 4, 1, TOFF(th->ngps));
     tiff_set(th, &th->ngps, 0, 1, 4, 0x202);
     tiff_set(th, &th->ngps, 1, 2, 2, TOFF(latref));
@@ -156,181 +158,189 @@ void LibRaw::jpeg_thumb_writer(FILE *tfp, char *t_humb, int t_humb_length)
 }
 void LibRaw::write_ppm_tiff()
 {
-    try
+  try
+  {
+    struct tiff_hdr th;
+    ushort *ppm2;
+    int c, row, col, soff, rstep, cstep;
+    int perc, val, total, t_white = 0x2000;
+
+    perc = width * height * auto_bright_thr;
+
+    if (fuji_width)
+      perc /= 2;
+    if (!((highlight & ~2) || no_auto_bright))
+      for (t_white = c = 0; c < colors; c++)
+      {
+        for (val = 0x2000, total = 0; --val > 32;)
+          if ((total += histogram[c][val]) > perc)
+            break;
+        if (t_white < val)
+          t_white = val;
+      }
+    gamma_curve(gamm[0], gamm[1], 2, (t_white << 3) / bright);
+    iheight = height;
+    iwidth = width;
+    if (flip & 4)
+      SWAP(height, width);
+
+    std::vector<uchar> ppm(width * colors * output_bps / 8);
+    ppm2 = (ushort *)ppm.data();
+    if (output_tiff)
     {
-        struct tiff_hdr th;
-        ushort *ppm2;
-        int c, row, col, soff, rstep, cstep;
-        int perc, val, total, t_white = 0x2000;
-
-        perc = width * height * auto_bright_thr;
-
-        if (fuji_width)
-            perc /= 2;
-        if (!((highlight & ~2) || no_auto_bright))
-            for (t_white = c = 0; c < colors; c++)
-            {
-                for (val = 0x2000, total = 0; --val > 32;)
-                    if ((total += histogram[c][val]) > perc)
-                        break;
-                if (t_white < val)
-                    t_white = val;
-            }
-        gamma_curve(gamm[0], gamm[1], 2, (t_white << 3) / bright);
-        iheight = height;
-        iwidth = width;
-        if (flip & 4)
-            SWAP(height, width);
-
-        std::vector<uchar> ppm(width * colors * output_bps / 8);
-        ppm2 = (ushort *)ppm.data();
-        if (output_tiff)
-        {
-            tiff_head(&th, 1);
-            fwrite(&th, sizeof th, 1, ofp);
-            if (oprof)
-                fwrite(oprof, ntohl(oprof[0]), 1, ofp);
-        }
-        else if (colors > 3)
-	{
-	    if(imgdata.params.output_flags & LIBRAW_OUTPUT_FLAGS_PPMMETA)
-	      fprintf(ofp,
-              "P7\n# EXPTIME=%0.5f\n# TIMESTAMP=%d\n# ISOSPEED=%d\n"
-              "# APERTURE=%0.1f\n# FOCALLEN=%0.1f\n# MAKE=%s\n# MODEL=%s\n"
-              "WIDTH %d\nHEIGHT %d\nDEPTH %d\nMAXVAL %d\nTUPLTYPE %s\nENDHDR\n",
-              shutter, (int)timestamp, (int)iso_speed,aperture, 
-	      focal_len, make, model,
-	      width, height, colors, (1 << output_bps) - 1, cdesc);
-	    else
-            fprintf(
-                ofp,
-                "P7\nWIDTH %d\nHEIGHT %d\nDEPTH %d\nMAXVAL %d\nTUPLTYPE %s\nENDHDR\n",
+      //tiff_head(&th, 1);
+      //fwrite(&th, sizeof th, 1, ofp);
+      tiff_header header;
+      header.Populate(imgdata, libraw_internal_data, true);
+      if (callbacks.export_modify_metadata_cb != NULL)
+      {
+        callbacks.export_modify_metadata_cb(this, &header, callbacks.export_modify_metadata_cb_data);
+      }
+      header.Write(ofp);
+      if (oprof)
+        fwrite(oprof, ntohl(oprof[0]), 1, ofp);
+    }
+    else if (colors > 3)
+    {
+      if (imgdata.params.output_flags & LIBRAW_OUTPUT_FLAGS_PPMMETA)
+        fprintf(
+            ofp,
+            "P7\n# EXPTIME=%0.5f\n# TIMESTAMP=%d\n# ISOSPEED=%d\n"
+            "# APERTURE=%0.1f\n# FOCALLEN=%0.1f\n# MAKE=%s\n# MODEL=%s\n"
+            "WIDTH %d\nHEIGHT %d\nDEPTH %d\nMAXVAL %d\nTUPLTYPE %s\nENDHDR\n",
+            shutter, (int)timestamp, (int)iso_speed, aperture, focal_len, make,
+            model, width, height, colors, (1 << output_bps) - 1, cdesc);
+      else
+        fprintf(ofp,
+                "P7\nWIDTH %d\nHEIGHT %d\nDEPTH %d\nMAXVAL %d\nTUPLTYPE "
+                "%s\nENDHDR\n",
                 width, height, colors, (1 << output_bps) - 1, cdesc);
-	}
-        else
-	{
-	    if(imgdata.params.output_flags & LIBRAW_OUTPUT_FLAGS_PPMMETA)
-	    	fprintf(ofp, "P%d\n# EXPTIME=%0.5f\n# TIMESTAMP=%d\n"
-		"# ISOSPEED=%d\n# APERTURE=%0.1f\n# FOCALLEN=%0.1f\n"
-		"# MAKE=%s\n# MODEL=%s\n%d %d\n%d\n",
-                colors/2+5,
-		shutter, (int)timestamp, (int)iso_speed,aperture,focal_len,
-		make,model,
-		width, height, (1 << output_bps)-1);
-	    else
-             fprintf(ofp, "P%d\n%d %d\n%d\n", colors / 2 + 5, width, height,
-            (1 << output_bps) - 1);
-        }
-        soff = flip_index(0, 0);
-        cstep = flip_index(0, 1) - soff;
-        rstep = flip_index(1, 0) - flip_index(0, width);
-        for (row = 0; row < height; row++, soff += rstep)
-        {
-            for (col = 0; col < width; col++, soff += cstep)
-                if (output_bps == 8)
-                    FORCC ppm[col * colors + c] = curve[image[soff][c]] >> 8;
-                else
-                    FORCC ppm2[col * colors + c] = curve[image[soff][c]];
-            if (output_bps == 16 && !output_tiff && htons(0x55aa) != 0x55aa)
-                swab((char *)ppm2, (char *)ppm2, width * colors * 2);
-            fwrite(ppm.data(), colors * output_bps / 8, width, ofp);
-        }
     }
-    catch (...)
+    else
     {
-        merror(NULL, "write_ppm_thumb()");
+      if (imgdata.params.output_flags & LIBRAW_OUTPUT_FLAGS_PPMMETA)
+        fprintf(ofp,
+                "P%d\n# EXPTIME=%0.5f\n# TIMESTAMP=%d\n"
+                "# ISOSPEED=%d\n# APERTURE=%0.1f\n# FOCALLEN=%0.1f\n"
+                "# MAKE=%s\n# MODEL=%s\n%d %d\n%d\n",
+                colors / 2 + 5, shutter, (int)timestamp, (int)iso_speed,
+                aperture, focal_len, make, model, width, height,
+                (1 << output_bps) - 1);
+      else
+        fprintf(ofp, "P%d\n%d %d\n%d\n", colors / 2 + 5, width, height,
+                (1 << output_bps) - 1);
     }
+    soff = flip_index(0, 0);
+    cstep = flip_index(0, 1) - soff;
+    rstep = flip_index(1, 0) - flip_index(0, width);
+    for (row = 0; row < height; row++, soff += rstep)
+    {
+      for (col = 0; col < width; col++, soff += cstep)
+        if (output_bps == 8)
+          FORCC ppm[col * colors + c] = curve[image[soff][c]] >> 8;
+        else
+          FORCC ppm2[col * colors + c] = curve[image[soff][c]];
+      if (output_bps == 16 && !output_tiff && htons(0x55aa) != 0x55aa)
+        swab((char *)ppm2, (char *)ppm2, width * colors * 2);
+      fwrite(ppm.data(), colors * output_bps / 8, width, ofp);
+    }
+  }
+  catch (...)
+  {
+    merror(NULL, "write_ppm_thumb()");
+  }
 }
 void LibRaw::ppm_thumb()
 {
-    try
-    {
-        thumb_length = thumb_width * thumb_height * 3;
-        std::vector<char> thumb(thumb_length);
-        fprintf(ofp, "P6\n%d %d\n255\n", thumb_width, thumb_height);
-        fread(thumb.data(), 1, thumb_length, ifp);
-        fwrite(thumb.data(), 1, thumb_length, ofp);
-    }
-    catch (...)
-    {
-        merror(NULL, "ppm_thumb()");
-    }
+  try
+  {
+    thumb_length = thumb_width * thumb_height * 3;
+    std::vector<char> thumb(thumb_length);
+    fprintf(ofp, "P6\n%d %d\n255\n", thumb_width, thumb_height);
+    fread(thumb.data(), 1, thumb_length, ifp);
+    fwrite(thumb.data(), 1, thumb_length, ofp);
+  }
+  catch (...)
+  {
+    merror(NULL, "ppm_thumb()");
+  }
 }
 
 void LibRaw::ppm16_thumb()
 {
-    try
-    {
-        unsigned i;
-        thumb_length = thumb_width * thumb_height * 3;
-        std::vector<char> thumb(thumb_length * 2, 0);
-        read_shorts((ushort *)thumb.data(), thumb_length);
-        for (i = 0; i < thumb_length; i++)
-            thumb[i] = ((ushort *)thumb.data())[i] >> 8;
-        fprintf(ofp, "P6\n%d %d\n255\n", thumb_width, thumb_height);
-        fwrite(thumb.data(), 1, thumb_length, ofp);
-    }
-    catch (...)
-    {
-        merror(NULL, "ppm16_thumb()");
-    }
+  try
+  {
+    unsigned i;
+    thumb_length = thumb_width * thumb_height * 3;
+    std::vector<char> thumb(thumb_length * 2, 0);
+    read_shorts((ushort *)thumb.data(), thumb_length);
+    for (i = 0; i < thumb_length; i++)
+      thumb[i] = ((ushort *)thumb.data())[i] >> 8;
+    fprintf(ofp, "P6\n%d %d\n255\n", thumb_width, thumb_height);
+    fwrite(thumb.data(), 1, thumb_length, ofp);
+  }
+  catch (...)
+  {
+    merror(NULL, "ppm16_thumb()");
+  }
 }
 
 void LibRaw::layer_thumb()
 {
-    try
-    {
-        unsigned int i;
-        int c;
-        char map[][4] = { "012", "102" };
+  try
+  {
+    unsigned int i;
+    int c;
+    char map[][4] = {"012", "102"};
 
-        colors = thumb_misc >> 5 & 7;
-        thumb_length = thumb_width * thumb_height;
-        std::vector<char> thumb(colors * thumb_length, 0);
-        fprintf(ofp, "P%d\n%d %d\n255\n", 5 + (colors >> 1), thumb_width,
+    colors = thumb_misc >> 5 & 7;
+    thumb_length = thumb_width * thumb_height;
+    std::vector<char> thumb(colors * thumb_length, 0);
+    fprintf(ofp, "P%d\n%d %d\n255\n", 5 + (colors >> 1), thumb_width,
             thumb_height);
-        fread(thumb.data(), thumb_length, colors, ifp);
-        for (i = 0; i < thumb_length; i++)
-            FORCC putc(thumb[i + thumb_length * (map[thumb_misc >> 8][c] - '0')], ofp);
-    }
-    catch (...)
-    {
-        merror(NULL, "layer_thumb()");
-    }
+    fread(thumb.data(), thumb_length, colors, ifp);
+    for (i = 0; i < thumb_length; i++)
+      FORCC putc(thumb[i + thumb_length * (map[thumb_misc >> 8][c] - '0')],
+                 ofp);
+  }
+  catch (...)
+  {
+    merror(NULL, "layer_thumb()");
+  }
 }
 
 void LibRaw::rollei_thumb()
 {
-    try
+  try
+  {
+    unsigned i;
+    thumb_length = thumb_width * thumb_height;
+    std::vector<ushort> thumb(thumb_length, 0);
+    fprintf(ofp, "P6\n%d %d\n255\n", thumb_width, thumb_height);
+    read_shorts(thumb.data(), thumb_length);
+    for (i = 0; i < thumb_length; i++)
     {
-        unsigned i;
-        thumb_length = thumb_width * thumb_height;
-        std::vector<ushort> thumb(thumb_length, 0);
-        fprintf(ofp, "P6\n%d %d\n255\n", thumb_width, thumb_height);
-        read_shorts(thumb.data(), thumb_length);
-        for (i = 0; i < thumb_length; i++)
-        {
-            putc(thumb[i] << 3, ofp);
-            putc(thumb[i] >> 5 << 2, ofp);
-            putc(thumb[i] >> 11 << 3, ofp);
-        }
+      putc(thumb[i] << 3, ofp);
+      putc(thumb[i] >> 5 << 2, ofp);
+      putc(thumb[i] >> 11 << 3, ofp);
     }
-    catch (...)
-    {
-        merror(NULL, "rollei_thumb()");
-    }
+  }
+  catch (...)
+  {
+    merror(NULL, "rollei_thumb()");
+  }
 }
 
 void LibRaw::jpeg_thumb()
 {
-    try
-    {
-        std::vector<char> thumb(thumb_length);
-        fread(thumb.data(), 1, thumb_length, ifp);
-        jpeg_thumb_writer(ofp, thumb.data(), thumb_length);
-    }
-    catch (...)
-    {
-        merror(NULL, "jpeg_thumb()");
-    }
+  try
+  {
+    std::vector<char> thumb(thumb_length);
+    fread(thumb.data(), 1, thumb_length, ifp);
+    jpeg_thumb_writer(ofp, thumb.data(), thumb_length);
+  }
+  catch (...)
+  {
+    merror(NULL, "jpeg_thumb()");
+  }
 }

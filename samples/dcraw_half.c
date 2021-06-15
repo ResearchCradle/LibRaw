@@ -21,6 +21,7 @@ it under the terms of the one of two licenses as you choose:
 #include <stdlib.h>
 #include <math.h>
 
+#define LIBRAW_NO_CONFIGURABLE_TIFF_METADATA
 #include "libraw/libraw.h"
 
 #define HANDLE_FATAL_ERROR(ret)                                                \

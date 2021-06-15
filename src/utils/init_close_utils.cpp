@@ -61,6 +61,7 @@ LibRaw::LibRaw(unsigned int flags) : memmgr(1024)
           callbacks.interpolate_bayer_cb = callbacks.interpolate_xtrans_cb =
               callbacks.post_interpolate_cb = callbacks.pre_converttorgb_cb =
                   callbacks.post_converttorgb_cb = NULL;
+  callbacks.export_modify_metadata_cb = NULL;
 
   memmove(&imgdata.params.aber, &aber, sizeof(aber));
   memmove(&imgdata.params.gamm, &gamm, sizeof(gamm));

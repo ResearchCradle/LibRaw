@@ -80,10 +80,15 @@ it under the terms of the one of two licenses as you choose:
 #include "libraw_const.h"
 #include "libraw_internal.h"
 #include "libraw_alloc.h"
+#ifndef LIBRAW_NO_CONFIGURABLE_TIFF_METADATA
+#include "image_metadata.h"
+#endif
 
 #ifdef __cplusplus
 extern "C"
 {
+#else
+#define libraw_data_t struct libraw_data_t //Maintain C Interop for dcraw_half.c
 #endif
   DllDef const char *libraw_strerror(int errorcode);
   DllDef const char *libraw_strprogress(enum LibRaw_progress);
@@ -128,6 +133,16 @@ extern "C"
                                            void *datap);
   DllDef void libraw_set_progress_handler(libraw_data_t *, progress_callback cb,
                                           void *datap);
+#ifndef LIBRAW_NO_CONFIGURABLE_TIFF_METADATA
+  class tiff_header;
+  DllDef void libraw_set_export_metadata_handler(
+      libraw_data_t *, export_image_metadata_callback cb, void* datap);
+  DllDef void libraw_set_metadata(libraw_data_t *lr, tiff_header *hdr,
+                                  image_metadata_section section, uint16_t tag,
+                                  image_metadata_value_type type,
+                                  const void *value, int valueSizeBytes,
+                                  int count);
+#endif
   DllDef const char *libraw_unpack_function_name(libraw_data_t *lr);
   DllDef int libraw_get_decoder_info(libraw_data_t *lr,
                                      libraw_decoder_info_t *d);
@@ -236,6 +251,11 @@ public:
   {
     callbacks.progresscb_data = data;
     callbacks.progress_cb = pcb;
+  }
+  void set_export_metadata_handler(export_image_metadata_callback cb, void *data)
+  {
+    callbacks.export_modify_metadata_cb = cb;
+    callbacks.export_modify_metadata_cb_data = data;
   }
 
   static const char* cameramakeridx2maker(unsigned maker);

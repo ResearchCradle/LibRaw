@@ -19,7 +19,10 @@ it under the terms of the one of two licenses as you choose:
 
 #include <math.h>
 #include <errno.h>
+
 #include "libraw/libraw.h"
+#include "libraw/image_metadata.h"
+#include "internal/tiff_header.h"
 
 #ifdef __cplusplus
 #include <new>
@@ -200,6 +203,31 @@ extern "C"
       return;
     LibRaw *ip = (LibRaw *)lr->parent_class;
     ip->set_progress_handler(cb, data);
+  }
+  void libraw_set_export_metadata_handler(libraw_data_t *lr,
+                                          export_image_metadata_callback cb, void* data)
+  {
+    if (!lr)
+      return;
+    LibRaw *ip = (LibRaw *)lr->parent_class;
+    ip->set_export_metadata_handler(cb, data);
+  }
+
+  void libraw_set_metadata(libraw_data_t *lr, tiff_header *hdr, image_metadata_section section, uint16_t tag, image_metadata_value_type type, const void* value, int valueSizeBytes, int count)
+  {
+    if (!lr)
+        return;
+    if (valueSizeBytes * count <= 4)
+    {
+      uint8_t values[4]{};
+      std::memcpy(&values, value, valueSizeBytes * count);
+      hdr->SetMetadata(section, tiff_metadata_value(tag, type, &values, 4, 1));
+
+    }
+    else
+    {
+      hdr->SetMetadata(section, tiff_metadata_value(tag, type, value, valueSizeBytes, count));
+    }
   }
 
   // DCRAW

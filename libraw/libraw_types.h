@@ -151,6 +151,7 @@ typedef unsigned long long UINT64;
   typedef int (*pre_identify_callback)(void *ctx);
   typedef void (*post_identify_callback)(void *ctx);
   typedef void (*process_step_callback)(void *ctx);
+  typedef void (*export_image_metadata_callback)(void* libraw_context, void* tiff_header, void* user_data);
 
   typedef struct
   {
@@ -171,6 +172,8 @@ typedef unsigned long long UINT64;
         pre_preinterpolate_cb, pre_interpolate_cb, interpolate_bayer_cb,
         interpolate_xtrans_cb, post_interpolate_cb, pre_converttorgb_cb,
         post_converttorgb_cb;
+    export_image_metadata_callback export_modify_metadata_cb;
+    void *export_modify_metadata_cb_data;
   } libraw_callbacks_t;
 
   typedef struct
@@ -1018,7 +1021,7 @@ typedef unsigned long long UINT64;
     ushort offset;
   } libraw_custom_camera_t;
 
-  typedef struct
+  struct libraw_data_t
   {
     ushort (*image)[4];
     libraw_image_sizes_t sizes;
@@ -1035,7 +1038,7 @@ typedef unsigned long long UINT64;
     libraw_thumbnail_t thumbnail;
     libraw_rawdata_t rawdata;
     void *parent_class;
-  } libraw_data_t;
+  };
 
   struct fuji_q_table
   {

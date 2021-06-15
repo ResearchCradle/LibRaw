@@ -244,6 +244,9 @@
     <ClCompile Include="..\src\demosaic\xtrans_demosaic.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\write\tiff_header.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\internal\dcraw_defs.h">
@@ -289,6 +292,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\internal\x3f_tools.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\internal\tiff_header.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libraw\image_metadata.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\internal\libraw_cameraids.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
