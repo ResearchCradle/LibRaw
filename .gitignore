@@ -1,0 +1,5 @@
+.vs/*
+buildfiles/*
+!buildfiles/*.pro
+!buildfiles/*.vcxproj
+!buildfiles/*.vcxproj.filters
